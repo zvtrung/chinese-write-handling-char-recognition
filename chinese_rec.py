@@ -8,7 +8,6 @@ import numpy as np
 import pickle
 from PIL import Image
 
-
 logger = logging.getLogger('Training the chinese write handling char recognition')
 logger.setLevel(logging.INFO)
 # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -16,12 +15,13 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 logger.addHandler(ch)
 
-# 输入参数解析
+# Input parameter definition
 tf.app.flags.DEFINE_boolean('random_flip_up_down', False, "Whether to random flip up down")
 tf.app.flags.DEFINE_boolean('random_brightness', True, "whether to adjust brightness")
 tf.app.flags.DEFINE_boolean('random_contrast', True, "whether to random constrast")
 
-tf.app.flags.DEFINE_integer('charset_size', 3755, "Choose the first `charset_size` character to conduct our experiment.")
+tf.app.flags.DEFINE_integer('charset_size', 3755,
+                            "Choose the first `charset_size` character to conduct our experiment.")
 tf.app.flags.DEFINE_integer('image_size', 64, "Needs to provide same value as in training.")
 tf.app.flags.DEFINE_boolean('gray', True, "whether to change the rbg to gray")
 tf.app.flags.DEFINE_integer('max_steps', 12002, 'the max training steps ')
@@ -47,7 +47,7 @@ class DataIterator:
         # Set FLAGS.charset_size to a small value if available computation power is limited.
         truncate_path = data_dir + ('%05d' % FLAGS.charset_size)
         print(truncate_path)
-        # 遍历训练集所有图像的路径，存储在image_names内
+        # Traversing the path of all images in the training set, stored in image_names
         self.image_names = []
         for root, sub_folder, file_list in os.walk(data_dir):
             if root < truncate_path:
@@ -61,16 +61,17 @@ class DataIterator:
 
     @staticmethod
     def data_augmentation(images):
-        # 镜像变换
+        # Mirror transformation
         if FLAGS.random_flip_up_down:
             images = tf.image.random_flip_up_down(images)
-        # 图像亮度变化
+        # Image brightness change
         if FLAGS.random_brightness:
             images = tf.image.random_brightness(images, max_delta=0.3)
-        # 对比度变化
+        # Contrast change
         if FLAGS.random_contrast:
             images = tf.image.random_contrast(images, 0.8, 1.2)
         return images
+
     # batch的生成
     def input_pipeline(self, batch_size, num_epochs=None, aug=False):
         # numpy array 转 tensor
@@ -107,7 +108,7 @@ def build_graph(top_k):
     flatten = slim.flatten(max_pool_3)
     fc1 = slim.fully_connected(slim.dropout(flatten, keep_prob), 1024, activation_fn=tf.nn.tanh, scope='fc1')
     logits = slim.fully_connected(slim.dropout(fc1, keep_prob), FLAGS.charset_size, activation_fn=None, scope='fc2')
-        # logits = slim.fully_connected(flatten, FLAGS.charset_size, activation_fn=None, reuse=reuse, scope='fc')
+    # logits = slim.fully_connected(flatten, FLAGS.charset_size, activation_fn=None, reuse=reuse, scope='fc')
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels))
     accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(logits, 1), labels), tf.float32))
 
@@ -146,7 +147,7 @@ def train():
         test_images, test_labels = test_feeder.input_pipeline(batch_size=128)
         graph = build_graph(top_k=1)
         sess.run(tf.global_variables_initializer())
-        # 设置多线程协调器
+        # Set up a multi-threaded coordinator
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         saver = tf.train.Saver()
@@ -154,7 +155,7 @@ def train():
         train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
         test_writer = tf.summary.FileWriter(FLAGS.log_dir + '/val')
         start_step = 0
-        # 可以从某个step下的模型继续训练
+        # Can continue training from a model under a certain step
         if FLAGS.restore:
             ckpt = tf.train.latest_checkpoint(FLAGS.checkpoint_dir)
             if ckpt:
@@ -199,7 +200,7 @@ def train():
             logger.info('==================Train Finished================')
             saver.save(sess, os.path.join(FLAGS.checkpoint_dir, 'my-model'), global_step=graph['global_step'])
         finally:
-            # 达到最大训练迭代数的时候清理关闭线程
+            # Clean up the closed thread when the maximum number of training iterations is reached
             coord.request_stop()
         coord.join(threads)
 
@@ -263,15 +264,19 @@ def validation():
         coord.join(threads)
     return {'prob': final_predict_val, 'indices': final_predict_index, 'groundtruth': groundtruth}
 
-class StrToBytes:  
-    def __init__(self, fileobj):  
-        self.fileobj = fileobj  
-    def read(self, size):  
-        return self.fileobj.read(size).encode()  
-    def readline(self, size=-1):  
+
+class StrToBytes:
+    def __init__(self, fileobj):
+        self.fileobj = fileobj
+
+    def read(self, size):
+        return self.fileobj.read(size).encode()
+
+    def readline(self, size=-1):
         return self.fileobj.readline(size).encode()
 
-# 获取汉字label映射表
+
+# Get Chinese character label mapping table
 def get_label_dict():
     # f=open('./chinese_labels','r')
     # label_dict = pickle.load(f)
@@ -280,9 +285,10 @@ def get_label_dict():
         label_dict = pickle.load(StrToBytes(data_file))
         return label_dict
 
-# 获待预测图像文件夹内的图像名字
+
+# The name of the image in the image folder to be predicted
 def get_file_list(path):
-    list_name=[]
+    list_name = []
     files = os.listdir(path)
     files.sort()
     for file in files:
@@ -290,40 +296,41 @@ def get_file_list(path):
         list_name.append(file_path)
     return list_name
 
+
 def inference(name_list):
     print('inference')
-    image_set=[]
-    # 对每张图进行尺寸标准化和归一化
+    image_set = []
+    # Standardize and normalize each image
     for image in name_list:
         temp_image = Image.open(image).convert('L')
         temp_image = temp_image.resize((FLAGS.image_size, FLAGS.image_size), Image.ANTIALIAS)
         temp_image = np.asarray(temp_image) / 255.0
         temp_image = temp_image.reshape([-1, 64, 64, 1])
         image_set.append(temp_image)
-        
-    # allow_soft_placement 如果你指定的设备不存在，允许TF自动分配设备
-    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,allow_soft_placement=True)) as sess:
+
+    # allow_soft_placement Allow TF to automatically assign devices if the device you specify does not exist
+    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)) as sess:
         logger.info('========start inference============')
         # images = tf.placeholder(dtype=tf.float32, shape=[None, 64, 64, 1])
         # Pass a shadow label 0. This label will not affect the computation graph.
         graph = build_graph(top_k=3)
         saver = tf.train.Saver()
-        # 自动获取最后一次保存的模型
+        # Automatically get the last saved model
         ckpt = tf.train.latest_checkpoint(FLAGS.checkpoint_dir)
-        if ckpt:       
+        if ckpt:
             saver.restore(sess, ckpt)
-        val_list=[]
-        idx_list=[]
-        # 预测每一张图
+        val_list = []
+        idx_list = []
+        # Predict each picture
         for item in image_set:
             temp_image = item
             predict_val, predict_index = sess.run([graph['predicted_val_top_k'], graph['predicted_index_top_k']],
-                                              feed_dict={graph['images']: temp_image,
-                                                         graph['keep_prob']: 1.0})
+                                                  feed_dict={graph['images']: temp_image,
+                                                             graph['keep_prob']: 1.0})
             val_list.append(predict_val)
             idx_list.append(predict_index)
-    #return predict_val, predict_index
-    return val_list,idx_list
+    # return predict_val, predict_index
+    return val_list, idx_list
 
 
 def main(_):
@@ -345,19 +352,21 @@ def main(_):
         # final_predict_val, final_predict_index = inference(image_path)
         # logger.info('the result info label {0} predict index {1} predict_val {2}'.format(final_predict_index[0][0], final_predict_index,final_predict_val))
         # logger.info('|{0},{1:.0%}|{2},{3:.0%}|{4},{5:.0%}|'.format(label_dict[int(final_predict_index[0][0])],final_predict_val[0][0],label_dict[int(final_predict_index[0][1])],final_predict_val[0][1],label_dict[int(final_predict_index[0][2])],final_predict_val[0][2]))
-        final_reco_text =[]  # 存储最后识别出来的文字串
-        # 给出top 3预测，candidate1是概率最高的预测
+        final_reco_text = []  # Store the last recognized text string
+        # Given top 3 prediction, candidate1 is the most probable prediction
         for i in range(len(final_predict_val)):
             candidate1 = final_predict_index[i][0][0]
             candidate2 = final_predict_index[i][0][1]
             candidate3 = final_predict_index[i][0][2]
             final_reco_text.append(label_dict[int(candidate1)])
-            logger.info('[the result info] image: {0} predict: {1} {2} {3}; predict index {4} predict_val {5}'.format(name_list[i], 
-                label_dict[int(candidate1)],label_dict[int(candidate2)],label_dict[int(candidate3)],final_predict_index[i],final_predict_val[i]))
-        print ('=====================OCR RESULT=======================\n')
-        # 打印出所有识别出来的结果（取top 1）
+            logger.info('[the result info] image: {0} predict: {1} {2} {3}; predict index {4} predict_val {5}'.format(
+                name_list[i],
+                label_dict[int(candidate1)], label_dict[int(candidate2)], label_dict[int(candidate3)],
+                final_predict_index[i], final_predict_val[i]))
+        print('=====================OCR RESULT=======================\n')
+        # Print out all identified results (take top 1)
         for i in range(len(final_reco_text)):
-           print(final_reco_text[i],)
+            print(final_reco_text[i], )
 
 
 if __name__ == "__main__":
